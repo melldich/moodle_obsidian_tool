@@ -1,0 +1,31 @@
+# moodle2obsidian config. `m2o init` writes this file for you to:
+#   Windows: %LOCALAPPDATA%\moodle2obsidian\config.yaml
+#   Linux:   ~/.config/moodle2obsidian/config.yaml
+#   macOS:   ~/Library/Application Support/moodle2obsidian/config.yaml
+# Any value can be overridden with env vars: M2O_LANGUAGE=en, M2O_MOODLE__RATE_LIMIT_PER_SEC=1
+# No secrets here — tokens live in the system keyring.
+
+moodle:
+  url: https://moodle.example.edu      # site root (wwwroot), https only
+  service: moodle_mobile_app
+  url_scheme: moodlemobile             # scheme launch.php redirects to after SSO
+  rate_limit_per_sec: 1.5
+  timeout_sec: 30
+  max_retries: 3
+  browser_channel: chrome              # chrome | msedge | chromium (for SSO login)
+
+vault:
+  path: ~/Obsidian/MyVault
+  subdir: Moodle
+
+language: uk                           # uk | en
+
+llm:
+  backend: claude_code                 # claude_code | anthropic
+  model: claude-sonnet-5-5
+
+transcription:
+  backend: groq                        # groq (free tier API) | local (faster-whisper)
+  device: auto                         # auto | cpu | cuda  (local only)
+  local_model: large-v3-turbo
+  groq_model: whisper-large-v3-turbo

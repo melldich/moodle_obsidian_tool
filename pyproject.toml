@@ -1,0 +1,71 @@
+[project]
+name = "moodle2obsidian"
+version = "0.1.0"
+description = "Sync Moodle course materials into an Obsidian knowledge graph (personal use)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Artem Hrytsai" }]
+keywords = ["moodle", "obsidian", "notes", "knowledge-graph", "whisper"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Environment :: Console",
+]
+dependencies = [
+  "typer>=0.12",
+  "rich>=13.7",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "pyyaml>=6.0",
+  "httpx>=0.27",
+  "keyring>=25",
+  "platformdirs>=4.2",
+  "playwright>=1.45",
+]
+
+[project.urls]
+Repository = "https://github.com/melldich/moodle_obsidian_tool"
+
+[project.scripts]
+m2o = "moodle2obsidian.cli:run"
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "respx>=0.21",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "types-PyYAML",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/moodle2obsidian"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+# Cyrillic text in user-facing messages is intentional.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+mypy_path = "src"
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
