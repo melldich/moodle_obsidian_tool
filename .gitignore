@@ -1,0 +1,56 @@
+# --- secrets & session data (never commit) ---
+.env
+.env.*
+!.env.example
+config.yaml
+!config.example.yaml
+cookies*
+*.cookies
+*.session
+playwright/.auth/
+*.token
+credentials*.json
+
+# --- local state, caches, downloaded materials ---
+state.db
+*.db
+*.db-journal
+*.sqlite
+cache/
+downloads/
+logs/
+*.log
+*.srt
+*.vtt
+vault/
+attachments/
+*.mp4
+*.mkv
+*.webm
+*.m4a
+*.mp3
+*.wav
+*.opus
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- claude code local settings ---
+.claude/settings.local.json
