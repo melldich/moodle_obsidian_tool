@@ -20,6 +20,17 @@ vault:
 
 language: uk                           # uk | en
 
+courses:
+  include: []                          # course ids or name substrings; empty = all enrolled
+  exclude: []                          # e.g. [4100, "English"]
+  skip_hidden: true                    # courses removed from view ("archived") on the dashboard
+  skip_past: false                     # courses whose end date has passed
+
+fetch:
+  downloads_dir: null                  # default: <data dir>/downloads (outside the repo)
+  max_file_mb: 1024
+  download_timeout_sec: 600
+
 llm:
   backend: claude_code                 # claude_code | anthropic
   model: claude-sonnet-5-5

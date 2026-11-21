@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
@@ -19,11 +21,13 @@ from .auth import Tokens, private_token_key, token_key
 from .auth.password import password_login
 from .auth.sso import sso_login
 from .auth.store import get_secret, set_secret
-from .config import Settings, data_dir, default_config_path, load_settings, log_dir, save_settings
+from .config import Settings, data_dir, default_config_path, load_settings, log_dir, save_settings, state_path
 from .errors import M2OError
+from .fetch.collect import Collector, available_functions, course_skip_reason, fetch_courses
 from .log import redact, setup_logging
 from .moodle.client import MoodleClient, fetch_public_config, normalize_site_url
 from .moodle.doctor import EXTERNAL_TOOLS, check_functions, check_tools
+from .state import State
 
 # pretty exceptions are off: they print local variables, which may hold tokens
 app = typer.Typer(
@@ -185,13 +189,7 @@ def login(
 def doctor(ctx: typer.Context) -> None:
     """Проверить доступ и доступные функции API / Check access and API functions."""
     settings = load_settings(ctx.obj)
-    cfg = settings.moodle
-    token = get_secret(token_key(cfg.host))
-    if not token:
-        raise M2OError(
-            f"Нет токена для {cfg.host}. Выполните `m2o login`.", f"No token for {cfg.host}. Run `m2o login`."
-        )
-    with MoodleClient(cfg, token) as client:
+    with _client(settings) as client:
         info: dict[str, Any] = client.call("core_webservice_get_site_info")
 
     console.print(
@@ -204,7 +202,7 @@ def doctor(ctx: typer.Context) -> None:
 
     checks = check_functions(info)
     table = Table(title="Moodle Web Services API")
-    table.add_column("Функция / function")
+    table.add_column("Функция / function", no_wrap=True)
     table.add_column("Для чего / purpose")
     table.add_column("Статус / status")
     for check in checks:
@@ -232,3 +230,103 @@ def doctor(ctx: typer.Context) -> None:
     )
     if any(c.required and not c.available for c in checks):
         raise typer.Exit(1)
+
+
+def _client(settings: Settings) -> MoodleClient:
+    host = settings.moodle.host
+    token = get_secret(token_key(host))
+    if not token:
+        raise M2OError(f"Нет токена для {host}. Выполните `m2o login`.", f"No token for {host}. Run `m2o login`.")
+    return MoodleClient(settings.moodle, token)
+
+
+@app.command()
+def courses(ctx: typer.Context) -> None:
+    """Список курсов и что будет синхронизировано / List courses and what will be synced."""
+    settings = load_settings(ctx.obj)
+    with _client(settings) as client:
+        _, items = fetch_courses(client)
+    now = time.time()
+    table = Table(title="Курсы / courses")
+    table.add_column("ID", justify="right")
+    table.add_column("Короткое имя / short", no_wrap=True)
+    table.add_column("Название / name")
+    table.add_column("Синк / sync")
+    for course in items:
+        reason = course_skip_reason(course, settings.courses, now)
+        table.add_row(
+            str(course.get("id")),
+            escape(str(course.get("shortname", ""))),
+            escape(str(course.get("fullname", ""))),
+            "[green]✓[/green]" if reason is None else f"[dim]— {escape(reason)}[/dim]",
+        )
+    console.print(table)
+
+
+@app.command()
+def sync(
+    ctx: typer.Context,
+    course: Annotated[
+        list[int] | None, typer.Option("--course", help="Только эти ID курсов / only these course IDs")
+    ] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Показать, что будет скачано / plan only")] = False,
+    no_video: Annotated[bool, typer.Option("--no-video", help="Не качать видеофайлы / skip video files")] = False,
+) -> None:
+    """Скачать новые и изменённые материалы / Fetch new and changed materials."""
+    settings = load_settings(ctx.obj)
+    with _client(settings) as client, State(state_path()) as state:
+        info, items = fetch_courses(client)
+        now = time.time()
+        if course:
+            selected = [c for c in items if int(c["id"]) in course]
+        else:
+            selected = [c for c in items if course_skip_reason(c, settings.courses, now) is None]
+        collector = Collector(
+            client,
+            state,
+            settings.fetch,
+            settings.downloads_dir,
+            available_functions(info),
+            dry_run=dry_run,
+            no_video=no_video,
+            on_event=lambda message: console.print(Text(message)),
+        )
+        with console.status(f"Синхронизация {len(selected)} курсов… / syncing…"):
+            report = collector.run(selected)
+
+    if dry_run:
+        for label in report.planned:
+            console.print(Text(f"  + {label}"))
+    console.print(
+        f"Курсов / courses: {report.courses}  модулей / modules: {report.modules} "
+        f"(изменено / changed: {report.changed_modules})\n"
+        f"Скачано / downloaded: {report.downloaded} ({report.bytes / 1_048_576:.1f} MB)  "
+        f"дубли / duplicates: {report.deduplicated}  без изменений / unchanged: {report.unchanged}  "
+        f"пропущено / skipped: {report.skipped}"
+        + (f"  к скачиванию / planned: {len(report.planned)}" if dry_run else "")
+    )
+    console.print(f"Папка / folder: {escape(str(settings.downloads_dir))}")
+    if report.failed:
+        console.print(f"[red]Ошибки / failed: {len(report.failed)}[/red]")
+        for label, reason in report.failed:
+            console.print(Text(f"  ✗ {label}: {reason}", style="red"))
+        raise typer.Exit(1)
+
+
+@app.command()
+def status(ctx: typer.Context) -> None:
+    """Что уже скачано / What has been synced so far."""
+    settings = load_settings(ctx.obj)
+    path = state_path()
+    if not path.exists():
+        console.print("Синхронизаций ещё не было — запустите `m2o sync` / no sync yet.")
+        return
+    with State(path) as state:
+        stats = state.stats()
+    last = datetime.fromtimestamp(stats["last_sync"]).strftime("%Y-%m-%d %H:%M") if stats["last_sync"] else "—"
+    console.print(
+        f"Курсов / courses: {stats['courses']}  модулей / modules: {stats['modules']}  "
+        f"файлов / files: {stats['files']} ({stats['bytes'] / 1_048_576:.1f} MB)\n"
+        f"Последний синк / last sync: {last}\n"
+        f"Загрузки / downloads: {escape(str(settings.downloads_dir))}"
+    )

@@ -7,7 +7,7 @@ import re
 import time
 from collections.abc import Callable, Mapping
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -87,6 +87,28 @@ class MoodleClient:
     def close(self) -> None:
         self._http.close()
 
+    @property
+    def host(self) -> str:
+        return self._cfg.host
+
+    @property
+    def http(self) -> httpx.Client:
+        return self._http
+
+    def authed_url(self, url: str) -> str:
+        """Add the token to a Moodle file URL — only for https URLs on the configured host."""
+        parts = urlsplit(url)
+        if parts.scheme != "https" or parts.hostname != self.host:
+            raise M2OError(
+                f"Ссылка не на хост Moodle ({parts.hostname}) — токен не отправляется",
+                f"URL is not on the Moodle host ({parts.hostname}) — token not sent",
+            )
+        query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "token"]
+        return urlunsplit(parts._replace(query=urlencode([*query, ("token", self._token)])))
+
+    def leaks_token(self, text: str) -> bool:
+        return self._token in text
+
     def call(self, wsfunction: str, **params: Any) -> Any:
         data = {
             "wstoken": self._token,  # POST body only, never in the URL
@@ -102,7 +124,7 @@ class MoodleClient:
     def _post(self, url: str, data: dict[str, str]) -> httpx.Response:
         retries = self._cfg.max_retries
         for attempt in range(retries + 1):
-            self._throttle()
+            self.throttle()
             try:
                 response = self._http.post(url, data=data)
             except httpx.TransportError as exc:
@@ -129,7 +151,7 @@ class MoodleClient:
             return response
         raise M2OError(f"Moodle ответил HTTP {response.status_code}", f"Moodle returned HTTP {response.status_code}")
 
-    def _throttle(self) -> None:
+    def throttle(self) -> None:
         wait = self._last_request + self._min_interval - time.monotonic()
         if wait > 0:
             self._sleep(wait)

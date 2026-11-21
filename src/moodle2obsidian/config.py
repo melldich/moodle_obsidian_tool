@@ -30,6 +30,10 @@ def log_dir() -> Path:
     return Path(platformdirs.user_log_dir(APP_NAME, appauthor=False))
 
 
+def state_path() -> Path:
+    return data_dir() / "state.db"
+
+
 def default_config_path() -> Path:
     return Path(os.environ.get("M2O_CONFIG") or config_dir() / "config.yaml")
 
@@ -79,6 +83,24 @@ class TranscriptionConfig(BaseModel):
     groq_model: str = "whisper-large-v3-turbo"
 
 
+class CoursesConfig(BaseModel):
+    include: list[str] = Field(default_factory=list)  # course ids or name substrings; empty = all
+    exclude: list[str] = Field(default_factory=list)
+    skip_hidden: bool = True  # courses removed from view ("archived") on the Moodle dashboard
+    skip_past: bool = False  # courses whose end date has passed
+
+    @field_validator("include", "exclude", mode="before")
+    @classmethod
+    def _as_strings(cls, value: Any) -> list[str]:
+        return [str(v) for v in value or []]
+
+
+class FetchConfig(BaseModel):
+    downloads_dir: Path | None = None  # default: <data dir>/downloads
+    max_file_mb: int = Field(1024, gt=0)
+    download_timeout_sec: float = Field(600, gt=0)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="M2O_", env_nested_delimiter="__", extra="forbid")
 
@@ -87,6 +109,12 @@ class Settings(BaseSettings):
     language: Literal["uk", "en"] = "uk"
     llm: LLMConfig = Field(default_factory=LLMConfig)
     transcription: TranscriptionConfig = Field(default_factory=TranscriptionConfig)
+    courses: CoursesConfig = Field(default_factory=CoursesConfig)
+    fetch: FetchConfig = Field(default_factory=FetchConfig)
+
+    @property
+    def downloads_dir(self) -> Path:
+        return (self.fetch.downloads_dir or data_dir() / "downloads").expanduser()
 
     @classmethod
     def settings_customise_sources(

@@ -8,7 +8,7 @@ Runs weekly and appends new material without touching your own edits.
 
 Завантажує матеріали ваших курсів Moodle, розшифровує відео та будує в Obsidian конспект-граф знань.
 
-## Quick start (current stage: login + doctor)
+## Quick start (current stage: login, doctor, fetching materials)
 
 Requires [uv](https://docs.astral.sh/uv/) and Chrome or Edge (for SSO login).
 
@@ -18,7 +18,14 @@ uv sync
 uv run python -m moodle2obsidian init     # site URL, vault path, language, backends
 uv run python -m moodle2obsidian login    # SSO (Google…) opens a browser; or --method password|token
 uv run python -m moodle2obsidian doctor   # which Moodle API functions this site allows
+uv run python -m moodle2obsidian courses  # enrolled courses and which ones will be synced
+uv run python -m moodle2obsidian sync --dry-run   # what would be downloaded
+uv run python -m moodle2obsidian sync [--course ID] [--no-video]
+uv run python -m moodle2obsidian status
 ```
+
+Downloads go to the per-user data dir (`%LOCALAPPDATA%\moodle2obsidian\downloads` on Windows), never into the repo.
+Re-running `sync` only fetches new or changed files; an interrupted run resumes where it stopped.
 
 `uv run m2o …` works too; on Windows with Smart App Control the generated `m2o.exe` may be blocked,
 so `python -m moodle2obsidian` is the reliable form.
