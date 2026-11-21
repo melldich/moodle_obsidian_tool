@@ -77,8 +77,15 @@ def sso_login(cfg: MoodleConfig, cookies_path: Path, timeout_sec: float = 600) -
     try:
         from playwright.sync_api import Error as PlaywrightError
         from playwright.sync_api import sync_playwright
-    except ImportError:
-        raise M2OError("Playwright не установлен", "Playwright is not installed") from None
+    except ImportError as exc:
+        # usually a native module (greenlet .pyd) blocked by Windows Smart App Control, not a missing package
+        detail = f"{type(exc).__name__}: {exc}"
+        raise M2OError(
+            f"Не удалось загрузить Playwright ({detail}). Выполните `uv sync`; если Windows блокирует файлы "
+            "(Smart App Control) — используйте `m2o login --method token`.",
+            f"Could not load Playwright ({detail}). Run `uv sync`; if Windows blocks files (Smart App Control), "
+            "use `m2o login --method token`.",
+        ) from None
 
     passport = secrets.token_hex(8)
     launch_url = build_launch_url(cfg, passport)
