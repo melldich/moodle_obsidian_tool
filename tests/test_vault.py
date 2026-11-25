@@ -118,6 +118,7 @@ def populated(tmp_path: Path) -> tuple[State, Settings]:
         },
         {"id": 2, "section": 1, "name": "Week 1: Graphs", "summary": "", "modules": [17]},
         {"id": 3, "section": 2, "name": "Empty", "summary": "", "modules": []},
+        {"id": 4, "section": 3, "name": "Exams", "summary": "", "modules": [18, 19]},
     ]
     course = {"id": 101, "shortname": "ALG (2026)", "fullname": "ALG Algorithms / Алгоритми", "sections": sections}
     state.upsert_course(course)
@@ -161,6 +162,16 @@ def populated(tmp_path: Path) -> tuple[State, Settings]:
             ],
         },
     ]
+    modules += [
+        {"id": 18, "modname": "quiz", "name": "Midterm quiz", "url": f"{SITE}/mod/quiz/view.php?id=18"},
+        {
+            "id": 19,
+            "modname": "assign",
+            "name": "Final project",
+            "url": f"{SITE}/mod/assign/view.php?id=19",
+            "assignment": {"name": "Final project", "duedate": 4102531200},
+        },
+    ]
     for module in modules:
         state.upsert_module(101, 0, "General", module)
     _file(state, downloads, 11, "slides.pdf", b"%PDF", "application/pdf")
@@ -182,32 +193,35 @@ def test_vault_end_to_end(populated: tuple[State, Settings]) -> None:
     assert report.conflicts == []
 
     dashboard = (root / "00 Dashboard.md").read_text(encoding="utf-8")
-    assert "[[ALG Алгоритми (MOC)]]" in dashboard and "```dataview" in dashboard
+    assert "[[ALG Алгоритми (MOC)]]" in dashboard and "FLATTEN file.lists" in dashboard
+    assert "HW1 · [[ALG 00 General]]" in dashboard and "Final project (ALG)" in dashboard
 
     course_dir = root / "ALG Алгоритми"
+    assert not (course_dir / "Завдання").exists()  # assignments are not graph nodes
+    assert sorted(p.name for p in (course_dir / "Теми").iterdir()) == ["ALG 00 General.md", "ALG 01 Week 1_ Graphs.md"]
     moc = (course_dir / "ALG Алгоритми (MOC).md").read_text(encoding="utf-8")
     assert "[[ALG 00 General]]" in moc and "[[ALG 01 Week 1_ Graphs]]" in moc
-    assert "Empty" not in moc
-    assert "[[ALG HW1]]" in moc
+    assert "Empty" not in moc and "Exams" not in moc  # no topic for empty / tests-only sections
+    assert "HW1 · [[ALG 00 General]]" in moc and "Final project" in moc and "Midterm quiz" in moc
 
-    week0 = (course_dir / "Лекції" / "ALG 00 General.md").read_text(encoding="utf-8")
+    week0 = (course_dir / "Теми" / "ALG 00 General.md").read_text(encoding="utf-8")
     front, _, body = split_frontmatter(week0)
-    assert front is not None and front["type"] == "lecture" and "course/alg" in front["tags"]
+    assert front is not None and front["type"] == "topic" and "course/alg" in front["tags"]
+    assert body.index("## Конспект") < body.index("## Матеріали") < body.index("## Завдання")
     assert "[[ALG Алгоритми (MOC)]]" in body
     assert "Welcome" in body and "Read chapter 1" in body
-    assert "🎥 [Lecture video](<https://www.youtube.com/watch?v=abc>)" in body
-    assert "[[slides-00000011.pdf]]" in body
+    assert "### Відео" in body and "[Lecture video](<https://www.youtube.com/watch?v=abc>)" in body
+    assert "- **Slides**: [[slides-00000011.pdf]]" in body
+    assert "[deadline:: 2100-01-01T" in body and "**HW1**" in body
+    assert "> [!todo]- Умова" in body and "**all**" in body and "[[task-00000013.pdf]]" in body
+    assert "> [!quote]- News" in body
     for bad in ("<script", "alert", "onerror"):
         assert bad not in week0
 
-    book = (course_dir / "Лекції" / "ALG 01 Week 1_ Graphs.md").read_text(encoding="utf-8")
-    assert book.index("### Intro") < book.index("### Trees")  # chapters in book order, not key order
+    book = (course_dir / "Теми" / "ALG 01 Week 1_ Graphs.md").read_text(encoding="utf-8")
+    assert "> [!note]- Graph book" in book
+    assert book.index("#### Intro") < book.index("#### Trees")  # chapters in book order, not key order
     assert "![[graph-00000017.png]]" in book
-
-    task = (course_dir / "Завдання" / "ALG HW1.md").read_text(encoding="utf-8")
-    front, _, body = split_frontmatter(task)
-    assert front is not None and front["type"] == "assignment" and front["deadline"].startswith("2100-01-01")
-    assert "[[ALG 00 General]]" in body and "**all**" in body and "[[task-00000013.pdf]]" in body
 
     attachments = {p.name for p in (root / "attachments" / "ALG Алгоритми").iterdir()}
     assert attachments == {"slides-00000011.pdf", "task-00000013.pdf", "graph-00000017.png"}
@@ -217,10 +231,28 @@ def test_vault_end_to_end(populated: tuple[State, Settings]) -> None:
     # second run: nothing changes; user text outside the block survives a later update
     again = VaultWriter(state, settings).write_all()
     assert again.created == again.updated == 0
-    note = course_dir / "Лекції" / "ALG 00 General.md"
+    note = course_dir / "Теми" / "ALG 00 General.md"
     note.write_text(note.read_text(encoding="utf-8") + "\nMy own notes\n", encoding="utf-8")
     VaultWriter(state, settings).write_all()
     assert "My own notes" in note.read_text(encoding="utf-8")
+    state.close()
+
+
+def test_stale_notes_removed_only_if_untouched(populated: tuple[State, Settings]) -> None:
+    state, settings = populated
+    old = settings.vault.path / "Moodle" / "ALG Алгоритми" / "Завдання"
+    write_note(old / "ALG Old task.md", {"type": "assignment"}, "old generated")
+    write_note(old / "ALG Edited task.md", {"type": "assignment"}, "old generated")
+    edited = old / "ALG Edited task.md"
+    edited.write_text(edited.read_text(encoding="utf-8") + "\nmy answer\n", encoding="utf-8")
+    mine = settings.vault.path / "Moodle" / "My own page.md"
+    mine.write_text("---\ntype: assignment\n---\nnot generated\n", encoding="utf-8")
+
+    report = VaultWriter(state, settings).write_all()
+    assert report.removed == 1
+    assert not (old / "ALG Old task.md").exists()
+    assert edited.exists() and report.kept_stale == [str(Path("ALG Алгоритми") / "Завдання" / "ALG Edited task.md")]
+    assert mine.exists()
     state.close()
 
 
@@ -229,4 +261,26 @@ def test_missing_vault_is_a_clear_error(populated: tuple[State, Settings], tmp_p
     settings.vault.path = tmp_path / "nope"
     with pytest.raises(Exception, match="Vault"):
         VaultWriter(state, settings)
+    state.close()
+
+
+def test_videos_embedded_in_pages_are_listed(populated: tuple[State, Settings]) -> None:
+    state, settings = populated
+    page = {
+        "id": 20,
+        "modname": "page",
+        "name": "Before class",
+        "contents": [{"type": "file", "filename": "index.html", "filepath": "/"}],
+    }
+    state.upsert_module(101, 0, "General", page)
+    course = state.courses()[0]
+    course["sections"][1]["modules"].append(20)
+    state.upsert_course(course)
+    root = Path(state.files_for_module(17)[0]["local_path"]).parent
+    html = b"<iframe src='https://www.youtube.com/embed/xyz'></iframe><a href='https://youtu.be/xyz2'>v</a>"
+    _file(state, root, 20, "index.html", html, "text/html")
+    VaultWriter(state, settings).write_all()
+    note = settings.vault.path / "Moodle" / "ALG Алгоритми" / "Теми" / "ALG 01 Week 1_ Graphs.md"
+    videos = note.read_text(encoding="utf-8").split("### Відео", 1)[1].split("###", 1)[0]
+    assert "https://www.youtube.com/embed/xyz" in videos and "https://youtu.be/xyz2" in videos
     state.close()

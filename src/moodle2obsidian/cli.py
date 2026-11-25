@@ -335,9 +335,14 @@ def sync(
 def _print_vault(report: VaultReport, settings: Settings) -> None:
     console.print(
         f"Obsidian: создано / created {report.created}  обновлено / updated {report.updated}  "
-        f"без изменений / unchanged {report.unchanged}  вложений / attachments {report.attachments}\n"
+        f"без изменений / unchanged {report.unchanged}  удалено устаревших / stale removed {report.removed}  "
+        f"вложений / attachments {report.attachments}\n"
         f"Vault: {escape(str(settings.vault.path / settings.vault.subdir))}"
     )
+    for path in report.kept_stale:
+        console.print(
+            Text(f"  · {path}: устарела, но вы её правили — оставлена / stale but edited by you — kept", style="dim")
+        )
     for path in report.conflicts:
         console.print(
             Text(
