@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -18,16 +19,23 @@ from .fsutil import secure_write_text
 APP_NAME = "moodle2obsidian"
 
 
+# Windows: MSIX-packaged apps (e.g. Claude Desktop's terminal) silently redirect new %LOCALAPPDATA% folders
+# to a private per-app copy, so runs from different apps would see different state. Home is never redirected.
+_WIN_HOME = Path.home() / f".{APP_NAME}"
+
+
 def config_dir() -> Path:
-    return Path(platformdirs.user_config_dir(APP_NAME, appauthor=False))
+    return _WIN_HOME if sys.platform == "win32" else Path(platformdirs.user_config_dir(APP_NAME, appauthor=False))
 
 
 def data_dir() -> Path:
-    return Path(platformdirs.user_data_dir(APP_NAME, appauthor=False))
+    return (
+        _WIN_HOME / "data" if sys.platform == "win32" else Path(platformdirs.user_data_dir(APP_NAME, appauthor=False))
+    )
 
 
 def log_dir() -> Path:
-    return Path(platformdirs.user_log_dir(APP_NAME, appauthor=False))
+    return _WIN_HOME / "logs" if sys.platform == "win32" else Path(platformdirs.user_log_dir(APP_NAME, appauthor=False))
 
 
 def state_path() -> Path:

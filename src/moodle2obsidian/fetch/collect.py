@@ -11,6 +11,7 @@ from typing import Any
 
 from ..config import CoursesConfig, FetchConfig
 from ..errors import M2OError
+from ..fsutil import secure_mkdir
 from ..moodle.client import MoodleClient, MoodleError
 from ..safety import safe_join, sanitize_filename, split_moodle_path
 from ..state.db import State
@@ -81,7 +82,8 @@ class Collector:
         self.client = client
         self.state = state
         self.cfg = cfg
-        self.root = downloads_dir.resolve()
+        # create before resolving, so root and every resolved destination agree (even under FS redirection)
+        self.root = secure_mkdir(downloads_dir).resolve()
         self.available = available
         self.dry_run = dry_run
         self.no_video = no_video

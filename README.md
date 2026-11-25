@@ -24,7 +24,9 @@ uv run python -m moodle2obsidian sync [--course ID] [--no-video]
 uv run python -m moodle2obsidian status
 ```
 
-Downloads go to the per-user data dir (`%LOCALAPPDATA%\moodle2obsidian\downloads` on Windows), never into the repo.
+On Windows everything lives in `%USERPROFILE%\.moodle2obsidian` (config, `data\` with state and downloads,
+`logs\`), never in the repo. Not `%LOCALAPPDATA%`: MSIX-packaged apps such as Claude Desktop silently redirect
+new AppData folders to a private copy, which would split the state between terminals.
 Re-running `sync` only fetches new or changed files; an interrupted run resumes where it stopped.
 
 `uv run m2o …` works too; on Windows with Smart App Control the generated `m2o.exe` may be blocked,

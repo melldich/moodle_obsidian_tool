@@ -1,5 +1,5 @@
 # moodle2obsidian config. `m2o init` writes this file for you to:
-#   Windows: %LOCALAPPDATA%\moodle2obsidian\config.yaml
+#   Windows: %USERPROFILE%\.moodle2obsidian\config.yaml
 #   Linux:   ~/.config/moodle2obsidian/config.yaml
 #   macOS:   ~/Library/Application Support/moodle2obsidian/config.yaml
 # Any value can be overridden with env vars: M2O_LANGUAGE=en, M2O_MOODLE__RATE_LIMIT_PER_SEC=1

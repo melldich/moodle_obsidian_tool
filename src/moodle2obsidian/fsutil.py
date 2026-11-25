@@ -12,7 +12,7 @@ from .errors import M2OError
 
 
 def chmod_private(path: Path, mode: int) -> None:
-    # On Windows chmod only toggles read-only; files live in per-user %LOCALAPPDATA% protected by ACLs.
+    # On Windows chmod only toggles read-only; files live in the per-user profile protected by ACLs.
     if os.name != "nt":
         os.chmod(path, mode)
 
