@@ -30,6 +30,7 @@ from .log import redact, setup_logging
 from .moodle.client import MoodleClient, fetch_public_config, normalize_site_url
 from .moodle.doctor import EXTERNAL_TOOLS, check_functions, check_tools
 from .state import State
+from .vault.writer import VaultReport, VaultWriter
 
 # pretty exceptions are off: they print local variables, which may hold tokens
 app = typer.Typer(
@@ -301,6 +302,8 @@ def sync(
                 extracted = extract_pending(
                     state, settings.extracted_dir, settings.extract, on_event=lambda m: console.print(Text(m))
                 )
+            with console.status("Запись в Obsidian… / writing the vault…"):
+                notes = VaultWriter(state, settings).write_all()
 
     if dry_run:
         for label in report.planned:
@@ -319,6 +322,7 @@ def sync(
             f"не поддерживается / unsupported: {extracted.unsupported}  "
             f"картинки и медиа / images & media: {extracted.skipped}"
         )
+        _print_vault(notes, settings)
     console.print(f"Папка / folder: {escape(str(settings.downloads_dir))}")
     failed = report.failed + (extracted.failed if extracted else [])
     if failed:
@@ -326,6 +330,31 @@ def sync(
         for label, reason in failed:
             console.print(Text(f"  ✗ {label}: {reason}", style="red"))
         raise typer.Exit(1)
+
+
+def _print_vault(report: VaultReport, settings: Settings) -> None:
+    console.print(
+        f"Obsidian: создано / created {report.created}  обновлено / updated {report.updated}  "
+        f"без изменений / unchanged {report.unchanged}  вложений / attachments {report.attachments}\n"
+        f"Vault: {escape(str(settings.vault.path / settings.vault.subdir))}"
+    )
+    for path in report.conflicts:
+        console.print(
+            Text(
+                f"  ! {path}: вы правили сгенерированный блок — новая версия рядом в *.m2o-new.md / "
+                "you edited the generated block — new version saved next to it",
+                style="yellow",
+            )
+        )
+
+
+@app.command("rebuild-notes")
+def rebuild_notes(ctx: typer.Context) -> None:
+    """Пересобрать заметки из локальных данных, без сети / Rebuild notes from local data, offline."""
+    settings = load_settings(ctx.obj)
+    with exclusive_lock(data_dir() / "sync.lock"), State(state_path()) as state:
+        report = VaultWriter(state, settings).write_all()
+    _print_vault(report, settings)
 
 
 @app.command()

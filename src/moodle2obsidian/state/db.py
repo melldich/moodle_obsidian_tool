@@ -163,6 +163,20 @@ class State:
             return 0
         return int(row[0])
 
+    def courses(self) -> list[dict[str, Any]]:
+        return [json.loads(r["data"]) for r in self.conn.execute("SELECT data FROM courses ORDER BY id")]
+
+    def modules(self, course_id: int) -> dict[int, dict[str, Any]]:
+        rows = self.conn.execute("SELECT cmid, data FROM modules WHERE course_id = ?", (course_id,))
+        return {int(r["cmid"]): json.loads(r["data"]) for r in rows}
+
+    def files_for_module(self, cmid: int) -> list[sqlite3.Row]:
+        return list(
+            self.conn.execute(
+                "SELECT * FROM files WHERE cmid = ? AND local_path IS NOT NULL ORDER BY key", (cmid,)
+            ).fetchall()
+        )
+
     def key_for_path(self, local_path: str) -> str | None:
         row = self.conn.execute("SELECT key FROM files WHERE local_path = ? LIMIT 1", (local_path,)).fetchone()
         return str(row["key"]) if row else None

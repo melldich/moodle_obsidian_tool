@@ -149,7 +149,18 @@ class Collector:
             return
         self.report.courses += 1
         if not self.dry_run:
-            self.state.upsert_course(course)
+            # section titles, summaries and module order are what the vault notes are built from
+            outline = [
+                {
+                    "id": s.get("id"),
+                    "section": s.get("section"),
+                    "name": s.get("name"),
+                    "summary": s.get("summary") or "",
+                    "modules": [m.get("id") for m in s.get("modules") or []],
+                }
+                for s in sections
+            ]
+            self.state.upsert_course({**course, "sections": outline})
         course_dir = sanitize_filename(f"{cid} {name}", _COURSE_LEN)
         for section in sections:
             num = int(section.get("section") or 0)

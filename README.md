@@ -22,7 +22,14 @@ uv run python -m moodle2obsidian courses  # enrolled courses and which ones will
 uv run python -m moodle2obsidian sync --dry-run   # what would be downloaded
 uv run python -m moodle2obsidian sync [--course ID] [--no-video]
 uv run python -m moodle2obsidian status
+uv run python -m moodle2obsidian rebuild-notes    # rebuild the vault from local data, no network
 ```
+
+`sync` writes into `<vault>/Moodle/`: `00 Dashboard.md` → one MOC per course → a note per topic/week
+(`Лекції/`), assignments with Dataview `deadline` fields (`Завдання/`), files in `attachments/`.
+Generated text sits between `<!-- m2o:start -->` and `<!-- m2o:end -->`; anything you write outside the markers
+and any frontmatter keys you add are kept. If you edit *inside* the markers, the note is left alone and the new
+version is saved next to it as `*.m2o-new.md`.
 
 On Windows everything lives in `%USERPROFILE%\.moodle2obsidian` (config, `data\` with state and downloads,
 `logs\`), never in the repo. Not `%LOCALAPPDATA%`: MSIX-packaged apps such as Claude Desktop silently redirect
