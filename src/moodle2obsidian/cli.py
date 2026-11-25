@@ -23,6 +23,7 @@ from .auth.sso import sso_login
 from .auth.store import get_secret, set_secret
 from .config import Settings, data_dir, default_config_path, load_settings, log_dir, save_settings, state_path
 from .errors import M2OError
+from .extract.runner import extract_pending
 from .fetch.collect import Collector, available_functions, course_skip_reason, fetch_courses
 from .fsutil import exclusive_lock
 from .log import redact, setup_logging
@@ -294,6 +295,12 @@ def sync(
         )
         with console.status(f"Синхронизация {len(selected)} курсов… / syncing…"):
             report = collector.run(selected)
+        extracted = None
+        if not dry_run:
+            with console.status("Извлечение текста… / extracting text…"):
+                extracted = extract_pending(
+                    state, settings.extracted_dir, settings.extract, on_event=lambda m: console.print(Text(m))
+                )
 
     if dry_run:
         for label in report.planned:
@@ -306,10 +313,17 @@ def sync(
         f"пропущено / skipped: {report.skipped}"
         + (f"  к скачиванию / planned: {len(report.planned)}" if dry_run else "")
     )
+    if extracted is not None:
+        console.print(
+            f"Текст извлечён / text extracted: {extracted.extracted}  "
+            f"не поддерживается / unsupported: {extracted.unsupported}  "
+            f"картинки и медиа / images & media: {extracted.skipped}"
+        )
     console.print(f"Папка / folder: {escape(str(settings.downloads_dir))}")
-    if report.failed:
-        console.print(f"[red]Ошибки / failed: {len(report.failed)}[/red]")
-        for label, reason in report.failed:
+    failed = report.failed + (extracted.failed if extracted else [])
+    if failed:
+        console.print(f"[red]Ошибки / failed: {len(failed)}[/red]")
+        for label, reason in failed:
             console.print(Text(f"  ✗ {label}: {reason}", style="red"))
         raise typer.Exit(1)
 
@@ -327,7 +341,8 @@ def status(ctx: typer.Context) -> None:
     last = datetime.fromtimestamp(stats["last_sync"]).strftime("%Y-%m-%d %H:%M") if stats["last_sync"] else "—"
     console.print(
         f"Курсов / courses: {stats['courses']}  модулей / modules: {stats['modules']}  "
-        f"файлов / files: {stats['files']} ({stats['bytes'] / 1_048_576:.1f} MB)\n"
+        f"файлов / files: {stats['files']} ({stats['bytes'] / 1_048_576:.1f} MB)  "
+        f"с текстом / with text: {stats['extracted']}\n"
         f"Последний синк / last sync: {last}\n"
         f"Загрузки / downloads: {escape(str(settings.downloads_dir))}"
     )

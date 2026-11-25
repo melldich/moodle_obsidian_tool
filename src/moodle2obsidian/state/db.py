@@ -44,7 +44,16 @@ CREATE TABLE IF NOT EXISTS files (
     downloaded_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS files_sha256 ON files(sha256);
-PRAGMA user_version = 1;
+CREATE TABLE IF NOT EXISTS stages (
+    item TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    status TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    info TEXT,
+    done_at INTEGER NOT NULL,
+    PRIMARY KEY (item, stage)
+);
+PRAGMA user_version = 2;
 """
 
 
@@ -126,6 +135,34 @@ class State:
         row: sqlite3.Row | None = self.conn.execute("SELECT * FROM files WHERE key = ?", (key,)).fetchone()
         return row
 
+    def set_stage(self, item: str, stage: str, status: str, version: int, info: str = "") -> None:
+        self.conn.execute(
+            "INSERT INTO stages (item, stage, status, version, info, done_at) VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(item, stage) DO UPDATE SET status=excluded.status, version=excluded.version, "
+            "info=excluded.info, done_at=excluded.done_at",
+            (item, stage, status, version, info, int(time.time())),
+        )
+
+    def files_needing_stage(self, stage: str, version: int) -> list[tuple[str, str, str]]:
+        """Distinct downloaded files (sha256, local_path, mimetype) without an up-to-date `stage` result."""
+        rows = self.conn.execute(
+            "SELECT f.sha256, MIN(f.local_path), MIN(COALESCE(f.mimetype, '')) FROM files f "
+            "LEFT JOIN stages s ON s.item = f.sha256 AND s.stage = ? "
+            "WHERE f.sha256 IS NOT NULL AND f.local_path IS NOT NULL AND (s.item IS NULL OR s.version < ?) "
+            "GROUP BY f.sha256",
+            (stage, version),
+        ).fetchall()
+        return [(str(r[0]), str(r[1]), str(r[2])) for r in rows]
+
+    def _count_stage(self, stage: str) -> int:
+        try:
+            row = self.conn.execute(
+                "SELECT COUNT(*) FROM stages WHERE stage = ? AND status = 'ok'", (stage,)
+            ).fetchone()
+        except sqlite3.OperationalError:  # read-only open of a DB from before the stages table existed
+            return 0
+        return int(row[0])
+
     def key_for_path(self, local_path: str) -> str | None:
         row = self.conn.execute("SELECT key FROM files WHERE local_path = ? LIMIT 1", (local_path,)).fetchone()
         return str(row["key"]) if row else None
@@ -168,4 +205,5 @@ class State:
                 one("SELECT COALESCE(SUM(filesize), 0) FROM files WHERE local_path IS NOT NULL").fetchone()[0]
             ),
             "last_sync": int(one("SELECT COALESCE(MAX(synced_at), 0) FROM courses").fetchone()[0]),
+            "extracted": self._count_stage("extracted"),
         }

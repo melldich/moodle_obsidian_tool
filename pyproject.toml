@@ -23,6 +23,13 @@ dependencies = [
   "keyring>=25",
   "platformdirs>=4.2",
   "playwright>=1.45",
+  "pypdfium2",
+  "python-docx",
+  "python-pptx",
+  "markdownify",
+  "nh3",
+  "pillow",
+  "beautifulsoup4",
 ]
 
 [project.urls]

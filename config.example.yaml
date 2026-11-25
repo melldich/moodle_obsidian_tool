@@ -31,6 +31,13 @@ fetch:
   max_file_mb: 1024
   download_timeout_sec: 600
 
+extract:
+  ocr: true                            # OCR scanned PDF pages; needs the `tesseract` program
+  ocr_languages: ukr+eng
+  timeout_sec: 120                     # per file; a hung parser is killed, the sync continues
+  max_zip_mb: 200                      # zip-bomb guard: total unpacked size
+  max_zip_members: 500
+
 llm:
   backend: claude_code                 # claude_code | anthropic
   model: claude-sonnet-5-5

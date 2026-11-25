@@ -109,6 +109,14 @@ class FetchConfig(BaseModel):
     download_timeout_sec: float = Field(600, gt=0)
 
 
+class ExtractConfig(BaseModel):
+    ocr: bool = True  # OCR pages without a text layer (needs the `tesseract` program)
+    ocr_languages: str = Field("ukr+eng", pattern=r"^[a-z_]+(\+[a-z_]+)*$")
+    timeout_sec: float = Field(120, gt=0)  # per file; a hung parser is killed, the sync goes on
+    max_zip_mb: int = Field(200, gt=0)
+    max_zip_members: int = Field(500, gt=0)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="M2O_", env_nested_delimiter="__", extra="forbid")
 
@@ -119,10 +127,15 @@ class Settings(BaseSettings):
     transcription: TranscriptionConfig = Field(default_factory=TranscriptionConfig)
     courses: CoursesConfig = Field(default_factory=CoursesConfig)
     fetch: FetchConfig = Field(default_factory=FetchConfig)
+    extract: ExtractConfig = Field(default_factory=ExtractConfig)
 
     @property
     def downloads_dir(self) -> Path:
         return (self.fetch.downloads_dir or data_dir() / "downloads").expanduser()
+
+    @property
+    def extracted_dir(self) -> Path:
+        return data_dir() / "extracted"
 
     @classmethod
     def settings_customise_sources(
