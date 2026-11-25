@@ -51,3 +51,28 @@ def test_state_file_is_private(tmp_path: Path) -> None:
     if os.name != "nt":
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
         assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+
+
+def test_readonly_open_does_not_write(tmp_path: Path) -> None:
+    path = tmp_path / "state.db"
+    with State(path) as state:
+        state.upsert_course({"id": 1, "shortname": "A", "fullname": "Alpha"})
+    with State(path, readonly=True) as state:
+        assert state.stats()["courses"] == 1
+
+
+def test_key_for_path(tmp_path: Path) -> None:
+    with State(tmp_path / "state.db") as state:
+        state.record_file(
+            key="5:/a.pdf",
+            course_id=1,
+            cmid=5,
+            filename="a.pdf",
+            mimetype="",
+            filesize=1,
+            timemodified=1,
+            local_path="/x/a.pdf",
+            sha256="h",
+        )
+        assert state.key_for_path("/x/a.pdf") == "5:/a.pdf"
+        assert state.key_for_path("/x/b.pdf") is None

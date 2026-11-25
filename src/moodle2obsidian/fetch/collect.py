@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -87,6 +88,16 @@ class Collector:
         self.on_event = on_event
         self.report = FetchReport()
         self._warned: set[str] = set()
+        self._claimed: dict[Path, str] = {}
+
+    def _unique_dest(self, dest: Path, key: str) -> Path:
+        """Two different Moodle files must never share a local path (truncated names can collide)."""
+        owner = self._claimed.get(dest) or self.state.key_for_path(str(dest))
+        if owner is not None and owner != key:
+            tag = hashlib.sha256(key.encode()).hexdigest()[:8]
+            dest = dest.with_name(f"{dest.stem}~{tag}{dest.suffix}")
+        self._claimed[dest] = key
+        return dest
 
     def optional(self, wsfunction: str, **params: Any) -> Any:
         """Call a function the tool can live without; degrade to None with a warning."""
@@ -167,7 +178,8 @@ class Collector:
         files = [c for c in module.get("contents") or [] if c.get("type") == "file"]
         intro = module.get("assignment", {}).get("introattachments") or []
         files += [{**a, "filepath": "/intro/"} for a in intro]
-        module_dir = sanitize_filename(str(module.get("name") or cmid), _MODULE_LEN)
+        # cmid keeps the dir unique when long module names truncate to the same prefix
+        module_dir = sanitize_filename(f"{cmid} {module.get('name') or ''}", _MODULE_LEN)
         for content in files:
             self._file(cid, cmid, [*dirs, module_dir], content)
 
@@ -203,7 +215,7 @@ class Collector:
             return
         try:
             subdirs = [sanitize_filename(p, _SUBDIR_LEN) for p in split_moodle_path(filepath)]
-            dest = safe_join(self.root, *dirs, *subdirs, sanitize_filename(filename, _FILE_LEN))
+            dest = self._unique_dest(safe_join(self.root, *dirs, *subdirs, sanitize_filename(filename, _FILE_LEN)), key)
         except M2OError as exc:
             self.report.failed.append((filename, exc.en))
             return

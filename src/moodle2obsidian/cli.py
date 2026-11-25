@@ -24,6 +24,7 @@ from .auth.store import get_secret, set_secret
 from .config import Settings, data_dir, default_config_path, load_settings, log_dir, save_settings, state_path
 from .errors import M2OError
 from .fetch.collect import Collector, available_functions, course_skip_reason, fetch_courses
+from .fsutil import exclusive_lock
 from .log import redact, setup_logging
 from .moodle.client import MoodleClient, fetch_public_config, normalize_site_url
 from .moodle.doctor import EXTERNAL_TOOLS, check_functions, check_tools
@@ -274,7 +275,7 @@ def sync(
 ) -> None:
     """Скачать новые и изменённые материалы / Fetch new and changed materials."""
     settings = load_settings(ctx.obj)
-    with _client(settings) as client, State(state_path()) as state:
+    with exclusive_lock(data_dir() / "sync.lock"), _client(settings) as client, State(state_path()) as state:
         info, items = fetch_courses(client)
         now = time.time()
         if course:
@@ -321,7 +322,7 @@ def status(ctx: typer.Context) -> None:
     if not path.exists():
         console.print("Синхронизаций ещё не было — запустите `m2o sync` / no sync yet.")
         return
-    with State(path) as state:
+    with State(path, readonly=True) as state:
         stats = state.stats()
     last = datetime.fromtimestamp(stats["last_sync"]).strftime("%Y-%m-%d %H:%M") if stats["last_sync"] else "—"
     console.print(

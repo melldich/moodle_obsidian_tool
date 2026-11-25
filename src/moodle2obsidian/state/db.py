@@ -53,11 +53,17 @@ def content_hash(data: Any) -> str:
 
 
 class State:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, readonly: bool = False) -> None:
+        if readonly:  # status/inspection while a sync may be writing: never touch the schema or journal
+            self.conn = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True, timeout=30)
+            self.conn.row_factory = sqlite3.Row
+            return
         secure_mkdir(path.parent)
-        self.conn = sqlite3.connect(path)
+        self.conn = sqlite3.connect(path, timeout=30)
         chmod_private(path, 0o600)
         self.conn.row_factory = sqlite3.Row
+        # WAL: readers never block or roll back the writer's in-progress transaction
+        self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(_SCHEMA)
 
     def __enter__(self) -> State:
@@ -119,6 +125,10 @@ class State:
     def get_file(self, key: str) -> sqlite3.Row | None:
         row: sqlite3.Row | None = self.conn.execute("SELECT * FROM files WHERE key = ?", (key,)).fetchone()
         return row
+
+    def key_for_path(self, local_path: str) -> str | None:
+        row = self.conn.execute("SELECT key FROM files WHERE local_path = ? LIMIT 1", (local_path,)).fetchone()
+        return str(row["key"]) if row else None
 
     def path_for_sha256(self, sha256: str) -> str | None:
         row = self.conn.execute(

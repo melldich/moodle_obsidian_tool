@@ -127,3 +127,20 @@ def test_missing_optional_functions_degrade(moodle: Any, moodle_cfg: MoodleConfi
 )
 def test_course_filter(cfg: CoursesConfig, course: dict[str, Any], skipped: bool) -> None:
     assert (course_skip_reason(course, cfg, now=100) is not None) is skipped
+
+
+def test_truncated_names_never_share_a_path(tmp_path: Path) -> None:
+    with State(tmp_path / "state.db") as state:
+        collector = Collector(None, state, FetchConfig(), tmp_path / "dl", set())  # type: ignore[arg-type]
+        same = tmp_path / "dl" / "x" / "index.html"
+        first = collector._unique_dest(same, "11:/index.html")
+        second = collector._unique_dest(same, "12:/index.html")
+        assert first == same
+        assert second != first and second.suffix == ".html"
+        assert collector._unique_dest(same, "11:/index.html") == same  # same file keeps its path
+
+
+def test_module_dirs_include_cmid(moodle: Any, moodle_cfg: MoodleConfig, tmp_path: Path) -> None:
+    run(moodle_cfg, tmp_path)
+    dirs = {p.parent.name for p in (tmp_path / "dl").rglob("*.pdf")}
+    assert "11 Lecture 1 slides" in dirs

@@ -1,21 +1,29 @@
-# Install once: `uvx pre-commit install`
+# Install once: `uv run python -m pre_commit install`
+# All hooks run from the project's own .venv (`uv run --no-sync`), so they also work on Windows with
+# Smart App Control, which blocks freshly created tool environments. CI additionally runs gitleaks.
 repos:
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.21.2
-    hooks:
-      - id: gitleaks
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
-
   - repo: local
     hooks:
+      - id: detect-secrets
+        name: detect secrets (baseline = known fake test values)
+        entry: uv run --no-sync python -c "import sys; from detect_secrets.pre_commit_hook import main; sys.exit(main())" --baseline .secrets.baseline
+        language: system
+        exclude: ^uv\.lock$
+
+      - id: ruff
+        name: ruff
+        entry: uv run --no-sync ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --no-sync ruff format
+        language: system
+        types: [python]
+
       - id: forbidden-files
         name: block secrets, local state and downloaded course materials
-        entry: python scripts/check_forbidden_files.py
-        language: python
+        entry: uv run --no-sync python scripts/check_forbidden_files.py
+        language: system
         pass_filenames: true

@@ -36,8 +36,8 @@ falling back to a `0600` `.env` in the config dir. Nothing secret is ever writte
 ### Development
 
 ```bash
-uv run pytest && uv run ruff check . && uv run mypy src tests
-uvx pre-commit install   # gitleaks + ruff + forbidden-files guard on every commit
+uv run python -m pytest && uv run ruff check . && uv run python -m mypy src tests
+uv run python -m pre_commit install   # detect-secrets + ruff + forbidden-files guard on every commit
 ```
 
 ## Disclaimer
