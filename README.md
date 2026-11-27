@@ -10,6 +10,12 @@ Runs weekly and appends new material without touching your own edits.
 
 ## Quick start (current stage: login, doctor, fetching materials)
 
+**Easiest — with Claude Code:** clone the repo, open the folder in Claude Code and type `/obsidian_moodle`
+(or just say "sync my Moodle"). Claude asks for your Moodle address and vault path, opens the browser for your
+Moodle sign-in, runs the sync and tells you where the graph is. Passwords and keys never go through the chat.
+
+Manually:
+
 Requires [uv](https://docs.astral.sh/uv/) and Chrome or Edge (for SSO login).
 
 ```bash
