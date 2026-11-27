@@ -189,6 +189,21 @@ def login(
     )
 
 
+class KeyName(StrEnum):
+    anthropic = "anthropic"
+    groq = "groq"
+
+
+@app.command("set-key")
+def set_key(service: Annotated[KeyName, typer.Argument(help="anthropic | groq")]) -> None:
+    """Сохранить API-ключ в системный keyring / Store an API key in the system keyring."""
+    value = typer.prompt(f"{service.value} API key (ввод скрыт / hidden)", hide_input=True).strip()
+    if not value:
+        raise M2OError("Пустой ключ — ничего не сохранено.", "Empty key — nothing stored.")
+    where = set_secret(f"{service.value}_api_key", value)
+    console.print(f"[green]✓[/green] Ключ {service.value} сохранён / stored: {escape(where)}")
+
+
 @app.command()
 def doctor(ctx: typer.Context) -> None:
     """Проверить доступ и доступные функции API / Check access and API functions."""

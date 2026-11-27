@@ -32,6 +32,9 @@ dependencies = [
   "beautifulsoup4",
 ]
 
+[project.optional-dependencies]
+anthropic = ["anthropic>=1.0"]
+
 [project.urls]
 Repository = "https://github.com/melldich/moodle_obsidian_tool"
 
