@@ -38,7 +38,12 @@ new AppData folders to a private copy, which would split the state between termi
 Re-running `sync` only fetches new or changed files; an interrupted run resumes where it stopped.
 
 `uv run m2o …` works too; on Windows with Smart App Control the generated `m2o.exe` may be blocked,
-so `python -m moodle2obsidian` is the reliable form.
+so `python -m moodle2obsidian` is the reliable form. If Smart App Control also blocks `.venv\Scripts\python.exe`,
+build the venv on the signed python.org interpreter: `uv venv --python C:\path\to\python.exe .venv`, then `uv sync`.
+
+LLM summaries: either log in to Claude Code once (`claude`, then `/login`; `llm.backend: claude_code`, uses your
+subscription) or use an API key (`uv sync --extra anthropic`, `uv run python -m moodle2obsidian set-key anthropic`,
+`llm.backend: anthropic`). Keys go to the system keyring. Check the plan and cost first with `sync --dry-run`.
 
 Secrets: the token goes to the system keyring (Windows Credential Manager / macOS Keychain / Secret Service),
 falling back to a `0600` `.env` in the config dir. Nothing secret is ever written to the repo or logs.
