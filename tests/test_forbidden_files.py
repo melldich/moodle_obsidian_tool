@@ -35,7 +35,13 @@ def test_blocks(path: str) -> None:
 
 @pytest.mark.parametrize(
     "path",
-    [".env.example", "config.example.yaml", "src/moodle2obsidian/config.py", "tests/fixtures/course.json"],
+    [
+        ".env.example",
+        "config.example.yaml",
+        "src/moodle2obsidian/config.py",
+        "src/moodle2obsidian/vault/writer.py",
+        "tests/fixtures/course.json",
+    ],
 )
 def test_allows(path: str) -> None:
     assert guard.find_forbidden([path]) == []

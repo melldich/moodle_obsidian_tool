@@ -22,8 +22,8 @@ logs/
 *.log
 *.srt
 *.vtt
-vault/
-attachments/
+/vault/
+/attachments/
 *.mp4
 *.mkv
 *.webm

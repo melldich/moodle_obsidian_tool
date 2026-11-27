@@ -29,6 +29,7 @@ from .fsutil import exclusive_lock
 from .log import redact, setup_logging
 from .moodle.client import MoodleClient, fetch_public_config, normalize_site_url
 from .moodle.doctor import EXTERNAL_TOOLS, check_functions, check_tools
+from .notes.summarize import SummaryReport, estimate_tokens, pending_jobs, summarize
 from .state import State
 from .vault.writer import VaultReport, VaultWriter
 
@@ -274,6 +275,7 @@ def sync(
     ] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Показать, что будет скачано / plan only")] = False,
     no_video: Annotated[bool, typer.Option("--no-video", help="Не качать видеофайлы / skip video files")] = False,
+    no_llm: Annotated[bool, typer.Option("--no-llm", help="Без LLM-конспектов / skip LLM summaries")] = False,
 ) -> None:
     """Скачать новые и изменённые материалы / Fetch new and changed materials."""
     settings = load_settings(ctx.obj)
@@ -297,11 +299,21 @@ def sync(
         with console.status(f"Синхронизация {len(selected)} курсов… / syncing…"):
             report = collector.run(selected)
         extracted = None
+        summaries = None
+        if dry_run and not no_llm:
+            planned = pending_jobs(state, settings)
+            console.print(
+                f"LLM ({settings.llm.backend}, {settings.llm.model}): тем к обработке / topics to summarise: "
+                f"{len(planned)}, ~{estimate_tokens(planned):,} входных токенов / input tokens"
+            )
         if not dry_run:
             with console.status("Извлечение текста… / extracting text…"):
                 extracted = extract_pending(
                     state, settings.extracted_dir, settings.extract, on_event=lambda m: console.print(Text(m))
                 )
+            if not no_llm:
+                with console.status(f"Конспекты ({settings.llm.backend})… / summarising topics…"):
+                    summaries = summarize(state, settings, on_event=lambda m: console.print(Text(m)))
             with console.status("Запись в Obsidian… / writing the vault…"):
                 notes = VaultWriter(state, settings).write_all()
 
@@ -322,14 +334,27 @@ def sync(
             f"не поддерживается / unsupported: {extracted.unsupported}  "
             f"картинки и медиа / images & media: {extracted.skipped}"
         )
+        if summaries is not None:
+            _print_summaries(summaries)
         _print_vault(notes, settings)
     console.print(f"Папка / folder: {escape(str(settings.downloads_dir))}")
-    failed = report.failed + (extracted.failed if extracted else [])
+    failed = report.failed + (extracted.failed if extracted else []) + (summaries.failed if summaries else [])
     if failed:
         console.print(f"[red]Ошибки / failed: {len(failed)}[/red]")
         for label, reason in failed:
             console.print(Text(f"  ✗ {label}: {reason}", style="red"))
         raise typer.Exit(1)
+
+
+def _print_summaries(report: SummaryReport) -> None:
+    cost = f"  ~${report.cost_usd:.2f}" if report.cost_usd else ""
+    console.print(
+        f"Конспекты / summaries: новых / new {report.done}  актуальных / up to date {report.cached}  "
+        f"осталось / left {report.pending_left}  токены / tokens: {report.input_tokens:,} in, "
+        f"{report.output_tokens:,} out{cost}"
+    )
+    if report.stopped:
+        console.print(Text(f"  ! LLM остановлен / stopped: {report.stopped}", style="yellow"))
 
 
 def _print_vault(report: VaultReport, settings: Settings) -> None:
@@ -376,7 +401,7 @@ def status(ctx: typer.Context) -> None:
     console.print(
         f"Курсов / courses: {stats['courses']}  модулей / modules: {stats['modules']}  "
         f"файлов / files: {stats['files']} ({stats['bytes'] / 1_048_576:.1f} MB)  "
-        f"с текстом / with text: {stats['extracted']}\n"
+        f"с текстом / with text: {stats['extracted']}  конспектов тем / topic summaries: {stats['summarized']}\n"
         f"Последний синк / last sync: {last}\n"
         f"Загрузки / downloads: {escape(str(settings.downloads_dir))}"
     )

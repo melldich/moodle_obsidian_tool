@@ -39,8 +39,14 @@ extract:
   max_zip_members: 500
 
 llm:
-  backend: claude_code                 # claude_code | anthropic
-  model: claude-sonnet-5-5
+  backend: claude_code                 # claude_code (your Claude subscription, `claude` CLI) | anthropic (API key)
+  model: claude-opus-5-5
+  effort: medium                       # anthropic backend: low | medium | high
+  timeout_sec: 600
+  max_input_chars: 600000              # per topic; longer input is cut proportionally (with a warning)
+  max_topics_per_run: 60               # budget per run; the rest waits for the next sync
+  max_tokens_per_run: 5000000
+  # prompt: copy src/moodle2obsidian/prompts/topic_summary.md to <config dir>/prompts/ to customise it
 
 transcription:
   backend: groq                        # groq (free tier API) | local (faster-whisper)

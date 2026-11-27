@@ -53,7 +53,12 @@ CREATE TABLE IF NOT EXISTS stages (
     done_at INTEGER NOT NULL,
     PRIMARY KEY (item, stage)
 );
-PRAGMA user_version = 2;
+CREATE TABLE IF NOT EXISTS concepts (
+    key TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+PRAGMA user_version = 3;
 """
 
 
@@ -143,6 +148,22 @@ class State:
             (item, stage, status, version, info, int(time.time())),
         )
 
+    def get_stage(self, item: str, stage: str) -> sqlite3.Row | None:
+        row: sqlite3.Row | None = self.conn.execute(
+            "SELECT * FROM stages WHERE item = ? AND stage = ?", (item, stage)
+        ).fetchone()
+        return row
+
+    def concept_name(self, key: str, proposed: str) -> str:
+        """Stable display name per concept key: the first name ever seen wins, so note names never flip."""
+        row = self.conn.execute("SELECT name FROM concepts WHERE key = ?", (key,)).fetchone()
+        if row is not None:
+            return str(row["name"])
+        self.conn.execute(
+            "INSERT INTO concepts (key, name, created_at) VALUES (?, ?, ?)", (key, proposed, int(time.time()))
+        )
+        return proposed
+
     def files_needing_stage(self, stage: str, version: int) -> list[tuple[str, str, str]]:
         """Distinct downloaded files (sha256, local_path, mimetype) without an up-to-date `stage` result."""
         rows = self.conn.execute(
@@ -220,4 +241,5 @@ class State:
             ),
             "last_sync": int(one("SELECT COALESCE(MAX(synced_at), 0) FROM courses").fetchone()[0]),
             "extracted": self._count_stage("extracted"),
+            "summarized": self._count_stage("summarized"),
         }

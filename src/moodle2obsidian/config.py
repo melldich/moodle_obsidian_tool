@@ -81,7 +81,12 @@ class VaultConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     backend: Literal["claude_code", "anthropic"] = "claude_code"
-    model: str = "claude-sonnet-5-5"
+    model: str = "claude-opus-5-5"
+    effort: Literal["low", "medium", "high"] = "medium"  # anthropic backend
+    timeout_sec: float = Field(600, gt=0)
+    max_input_chars: int = Field(600_000, gt=1000)  # per topic; longer input is cut proportionally, with a warning
+    max_topics_per_run: int = Field(60, gt=0)  # budget: topics summarised per run (the rest wait for the next)
+    max_tokens_per_run: int = Field(5_000_000, gt=0)  # budget: input + output tokens per run
 
 
 class TranscriptionConfig(BaseModel):
@@ -136,6 +141,10 @@ class Settings(BaseSettings):
     @property
     def extracted_dir(self) -> Path:
         return data_dir() / "extracted"
+
+    @property
+    def notes_dir(self) -> Path:
+        return data_dir() / "notes"
 
     @classmethod
     def settings_customise_sources(

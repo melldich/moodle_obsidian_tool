@@ -7,7 +7,8 @@ import sys
 
 ALLOWED_NAMES = {".env.example", "config.example.yaml"}
 FORBIDDEN = re.compile(
-    r"(^|/)(downloads|cache|logs|vault|attachments|playwright/\.auth)/"
+    r"(^|/)(downloads|cache|logs|playwright/\.auth)/"
+    r"|^(vault|attachments)/"  # only at the repo root: src/moodle2obsidian/vault/ is code
     r"|(^|/)(\.env(\..*)?|config\.yaml|cookies[^/]*"
     r"|[^/]*\.(session|cookies|token|db|db-journal|sqlite|log|srt|vtt|mp4|mkv|webm|m4a|mp3|wav|opus))$",
     re.IGNORECASE,
